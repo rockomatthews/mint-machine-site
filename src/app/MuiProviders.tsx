@@ -2,11 +2,14 @@
 
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 
+// Dollar-bill / "money" palette
 const theme = createTheme({
   palette: {
     mode: "dark",
-    primary: { main: "#f5b041" },
-    background: { default: "#07090d", paper: "#0b0f17" },
+    primary: { main: "#4CAF50" }, // bill green
+    secondary: { main: "#A5D6A7" },
+    background: { default: "#070b08", paper: "#0b120d" },
+    text: { primary: "#EAF6EC", secondary: "rgba(234,246,236,0.72)" },
   },
   shape: { borderRadius: 14 },
   typography: {
