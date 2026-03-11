@@ -1,0 +1,67 @@
+:root {
+  --bg: #07090d;
+  --fg: #eef3ff;
+  --muted: rgba(255, 255, 255, 0.7);
+  --card: rgba(255, 255, 255, 0.06);
+  --cardBorder: rgba(255, 255, 255, 0.12);
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: radial-gradient(1200px 700px at 25% 0%, rgba(245, 176, 65, 0.12), transparent 60%),
+    radial-gradient(900px 600px at 90% 10%, rgba(64, 156, 255, 0.10), transparent 60%),
+    var(--bg);
+  color: var(--fg);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(245, 176, 65, 0.16);
+  border: 1px solid rgba(245, 176, 65, 0.35);
+}
+
+.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--cardBorder);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.kicker {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.cardTitle {
+  font-size: 18px;
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+
+.cardBody {
+  opacity: 0.82;
+  line-height: 1.5;
+}
