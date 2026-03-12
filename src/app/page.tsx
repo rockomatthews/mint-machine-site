@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AppShell } from "./ui/AppShell";
+import { MintMachineHero } from "./ui/MintMachineHero";
 
 export default function Home() {
   return (
@@ -13,6 +14,8 @@ export default function Home() {
             happened — and why.
           </p>
         </div>
+
+        <MintMachineHero />
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Link className="btn" href="/mine">

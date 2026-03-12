@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MintMachineHero } from "../ui/MintMachineHero";
 
 type Challenge = {
   id: string;
@@ -27,6 +28,7 @@ export default function MineClient() {
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [artifact, setArtifact] = useState<string>("");
   const [status, setStatus] = useState<string>("");
+  const [printing, setPrinting] = useState<boolean>(false);
 
   async function refreshMe() {
     const res = await fetch(`/api/paper/me?sessionId=${encodeURIComponent(sessionId)}`);
@@ -54,6 +56,9 @@ export default function MineClient() {
   async function submit() {
     if (!challenge) return;
     setStatus("Submitting...");
+    setPrinting(true);
+    const stopTimer = window.setTimeout(() => setPrinting(false), 1800);
+
     const res = await fetch("/api/paper/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -64,6 +69,10 @@ export default function MineClient() {
       }),
     });
     const j = await res.json();
+
+    window.clearTimeout(stopTimer);
+    setPrinting(false);
+
     if (!j?.ok) {
       setStatus(`Submit failed: ${j?.error || "unknown"}`);
       return;
@@ -78,6 +87,8 @@ export default function MineClient() {
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
+      <MintMachineHero printing={printing} />
+
       <div className="card">
         <div className="kicker">Your balance</div>
         <div className="cardTitle">Claimable PAPER (offchain for now)</div>
