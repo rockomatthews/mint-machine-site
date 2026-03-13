@@ -77,6 +77,23 @@ export default function MineClient() {
       setStatus(`Submit failed: ${j?.error || "unknown"}`);
       return;
     }
+
+    // Fun micro-reward for success
+    if (j.submission?.points > 0) {
+      // best-effort confetti
+      import("canvas-confetti")
+        .then((m: any) => {
+          const confetti = m.default || m;
+          confetti({
+            particleCount: 90,
+            spread: 68,
+            origin: { y: 0.7 },
+            colors: ["#22c55e", "#c7f9cc", "#e7f2e8"],
+          });
+        })
+        .catch(() => {});
+    }
+
     setStatus(`Verdict: ${j.submission.verdict}. +${j.submission.points} points.`);
     await refreshMe();
   }

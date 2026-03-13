@@ -20,6 +20,7 @@
     "@react-three/drei": "9.122.0",
     "@react-three/fiber": "8.17.10",
     "@supabase/supabase-js": "^2.99.1",
+    "canvas-confetti": "^1.9.3",
     "@tanstack/react-query": "^5.90.21",
     "next": "14.2.24",
     "pino-pretty": "^13.1.1",
