@@ -35,6 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link href="/mine">Mine</Link>
               <Link href="/leaderboard">Leaderboard</Link>
               <Link href="/token">Token</Link>
+              <Link href="/safety">Safety</Link>
             </nav>
           </div>
 

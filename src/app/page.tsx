@@ -31,27 +31,38 @@ export default function Home() {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
           <div className="card">
-            <div className="kicker">Game loop</div>
-            <div className="cardTitle">Challenge → Artifact → Verify</div>
-            <div className="cardBody">We generate a market story + questions. You submit answers. The verifier checks deterministically.</div>
+            <div className="kicker">Live</div>
+            <div className="cardTitle">Mine</div>
+            <div className="cardBody">Submit an artifact, get deterministic verification, earn claimable PAPER points (offchain).</div>
           </div>
           <div className="card">
-            <div className="kicker">Claims</div>
-            <div className="cardTitle">Claim anytime</div>
-            <div className="cardBody">Rewards accrue offchain and can be claimed onchain in batches.</div>
+            <div className="kicker">Live</div>
+            <div className="cardTitle">Leaderboard</div>
+            <div className="cardBody">See top miners, streaks, and what’s working (soon: “most cited sources”).</div>
           </div>
           <div className="card">
-            <div className="kicker">Culture</div>
-            <div className="cardTitle">Venue + tipping</div>
-            <div className="cardBody">We’ll connect this to the multi-agent concert venue stunt and enable tips with wallets connected.</div>
+            <div className="kicker">Locked / soon</div>
+            <div className="cardTitle">Claim on Base</div>
+            <div className="cardBody">Claim anytime with one explicit transaction. No “mystery signatures.”</div>
+          </div>
+          <div className="card">
+            <div className="kicker">Soon</div>
+            <div className="cardTitle">Research Agent</div>
+            <div className="cardBody">Generate better challenges from real events and produce structured briefs with confidence.</div>
+          </div>
+          <div className="card">
+            <div className="kicker">Soon</div>
+            <div className="cardTitle">Integrity / anti-sybil</div>
+            <div className="cardBody">Optional wallet attach and rate limits to keep mining credible without killing the fun.</div>
           </div>
         </div>
 
         <div className="card">
-          <div className="kicker">Status</div>
-          <div className="cardTitle">MVP scaffolding</div>
+          <div className="kicker">Proof</div>
+          <div className="cardTitle">Not deployed yet (by design)</div>
           <div className="cardBody">
-            This repo is Vercel-importable now. Next: real coordinator API + deterministic verifier + claim contract wiring.
+            Token/claim contracts are not deployed. This is intentional. We’ll ship the claim UX + contracts only after explicit go-live.
+            Read <Link href="/safety">Safety</Link>.
           </div>
         </div>
       </div>
