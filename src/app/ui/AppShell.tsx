@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import Image from "next/image";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -28,25 +28,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <Link href="/" style={{ fontWeight: 700, letterSpacing: -0.2 }}>
-              PAPER Protocol
+            <Link href="/" style={{ fontWeight: 800, letterSpacing: -0.2, display: "flex", alignItems: "center", gap: 10 }}>
+              <Image src="/paperProtocolLogo.png" alt="Mint Machine" width={28} height={28} priority style={{ borderRadius: 8 }} />
+              Mint Machine
             </Link>
             <nav style={{ display: "flex", gap: 12, opacity: 0.9 }}>
               <Link href="/mine">Mine</Link>
               <Link href="/leaderboard">Leaderboard</Link>
-              <Link href="/token">Token</Link>
-              <Link href="/safety">Safety</Link>
             </nav>
           </div>
-
-          <ConnectButton showBalance={false} />
         </div>
       </header>
 
       <main style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 16px" }}>{children}</main>
 
       <footer style={{ maxWidth: 1100, margin: "0 auto", padding: "30px 16px", opacity: 0.7, fontSize: 13 }}>
-        PAPER Protocol — brand: <b>$PAPER</b>. This MVP is a scaffold; token deployment comes later with explicit approval.
+        Mint Machine — arcade mining. Wallet connect + onchain claim comes later.
       </footer>
     </div>
   );

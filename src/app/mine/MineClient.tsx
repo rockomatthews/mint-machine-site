@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MintMachineHero } from "../ui/MintMachineHero";
 
 type Challenge = {
@@ -8,11 +8,17 @@ type Challenge = {
   seed: string;
   instructions: string;
   expiresAt: string;
+  meta?: {
+    mode: "timing_window";
+    windowPct: number; // 0..1
+    speed: number; // px/s normalized-ish
+    durationMs: number;
+  };
 };
 
 function getSessionId() {
   if (typeof window === "undefined") return "";
-  const k = "paper_session_id";
+  const k = "mint_session_id";
   let v = window.localStorage.getItem(k);
   if (!v) {
     v = `sess_${crypto.randomUUID().replace(/-/g, "")}`;
@@ -21,14 +27,27 @@ function getSessionId() {
   return v;
 }
 
+function clamp(n: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, n));
+}
+
 export default function MineClient() {
   const sessionId = useMemo(() => getSessionId(), []);
 
   const [points, setPoints] = useState<number>(0);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
-  const [artifact, setArtifact] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [printing, setPrinting] = useState<boolean>(false);
+
+  // run state
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState(0); // 0..1 moving bar
+  const [lastScore, setLastScore] = useState<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const dirRef = useRef<1 | -1>(1);
+  const tRef = useRef<number>(0);
+  const startedAtRef = useRef<number>(0);
+  const progressRef = useRef<number>(0);
 
   async function refreshMe() {
     const res = await fetch(`/api/paper/me?sessionId=${encodeURIComponent(sessionId)}`);
@@ -37,137 +56,222 @@ export default function MineClient() {
   }
 
   async function newChallenge() {
-    setStatus("Issuing challenge...");
+    setStatus("");
+    setLastScore(null);
+    setRunning(false);
+    progressRef.current = 0;
+    setProgress(0);
+
     const res = await fetch("/api/paper/challenge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId }),
+      body: JSON.stringify({ sessionId, mode: "timing_window" }),
     });
     const j = await res.json();
     if (!j?.ok) {
-      setStatus(`Challenge failed: ${j?.error || "unknown"}`);
+      setStatus("Not ready");
       return;
     }
     setChallenge(j.challenge);
-    setArtifact("");
-    setStatus("Challenge ready.");
   }
 
-  async function submit() {
+  function startRun() {
     if (!challenge) return;
-    setStatus("Submitting...");
+    setStatus("");
+    setLastScore(null);
+    setRunning(true);
     setPrinting(true);
-    const stopTimer = window.setTimeout(() => setPrinting(false), 1800);
 
+    // init motion
+    dirRef.current = Math.random() > 0.5 ? 1 : -1;
+    tRef.current = 0;
+    startedAtRef.current = performance.now();
+
+    const durationMs = challenge.meta?.durationMs ?? 8000;
+    const speed = challenge.meta?.speed ?? 0.9;
+
+    const tick = (now: number) => {
+      const dt = now - (startedAtRef.current + tRef.current);
+      tRef.current += dt;
+
+      // move progress back/forth
+      const move = (dt / 1000) * speed * 0.6; // tuned for feel
+      let p = progressRef.current + move * dirRef.current;
+      if (p >= 1) {
+        p = 1;
+        dirRef.current = -1;
+      }
+      if (p <= 0) {
+        p = 0;
+        dirRef.current = 1;
+      }
+      progressRef.current = p;
+      setProgress(p);
+
+      if (tRef.current >= durationMs) {
+        // auto-stop at end
+        stopRun(true);
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    window.setTimeout(() => setPrinting(false), 900);
+  }
+
+  async function stopRun(auto = false) {
+    if (!challenge) return;
+    if (!running) return;
+
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+
+    setRunning(false);
+
+    const windowPct = clamp(challenge.meta?.windowPct ?? 0.14, 0.06, 0.35);
+    const center = 0.5;
+    const dist = Math.abs(progressRef.current - center);
+    const halfWindow = windowPct / 2;
+
+    // score: 0..100
+    let score = 0;
+    if (dist <= halfWindow) {
+      // inside window: higher is better (closer to center)
+      score = Math.round((1 - dist / halfWindow) * 100);
+    } else {
+      // outside: still give small score so it doesn't feel punishing
+      const maxDist = 0.5;
+      const outside = clamp((dist - halfWindow) / (maxDist - halfWindow), 0, 1);
+      score = Math.round((1 - outside) * 15);
+    }
+
+    setLastScore(score);
+
+    // submit to server for points + leaderboard
+    setStatus(auto ? "Time!" : "");
     const res = await fetch("/api/paper/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sessionId,
         challengeId: challenge.id,
-        artifact,
+        artifact: JSON.stringify({ mode: "timing_window", score, progress: progressRef.current, auto }),
       }),
     });
+
     const j = await res.json();
-
-    window.clearTimeout(stopTimer);
-    setPrinting(false);
-
     if (!j?.ok) {
-      setStatus(`Submit failed: ${j?.error || "unknown"}`);
+      setStatus("Submit failed");
       return;
     }
 
-    // Fun micro-reward for success
-    if (j.submission?.points > 0) {
-      // best-effort confetti
+    const gained = j?.submission?.points ?? 0;
+    if (gained > 0) {
       import("canvas-confetti")
         .then((m: any) => {
           const confetti = m.default || m;
-          confetti({
-            particleCount: 90,
-            spread: 68,
-            origin: { y: 0.7 },
-            colors: ["#22c55e", "#c7f9cc", "#e7f2e8"],
-          });
+          confetti({ particleCount: 70, spread: 65, origin: { y: 0.7 }, colors: ["#22c55e", "#c7f9cc", "#e7f2e8"] });
         })
         .catch(() => {});
     }
 
-    setStatus(`Verdict: ${j.submission.verdict}. +${j.submission.points} points.`);
+    setStatus(`+${gained} hash`);
     await refreshMe();
   }
 
   useEffect(() => {
     refreshMe();
+    newChallenge();
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const windowPct = clamp(challenge?.meta?.windowPct ?? 0.14, 0.06, 0.35);
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <MintMachineHero printing={printing} />
 
       <div className="card">
-        <div className="kicker">Your balance</div>
-        <div className="cardTitle">Claimable PAPER (offchain for now)</div>
-        <div className="cardBody">
-          <div style={{ fontSize: 28, fontWeight: 800 }}>{points}</div>
-          <div style={{ opacity: 0.8, marginTop: 6 }}>
-            No wallet signatures during mining. Claim will be a separate step later.
+        <div className="cardBody" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+          <div>
+            <div className="kicker">Your hash</div>
+            <div style={{ fontSize: 30, fontWeight: 900, lineHeight: 1 }}>{points}</div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <a className="button" href="/leaderboard" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+              Leaderboard
+            </a>
+            <button className="button" onClick={newChallenge} disabled={running}>
+              New run
+            </button>
           </div>
         </div>
       </div>
 
       <div className="card">
-        <div className="kicker">Challenge</div>
-        <div className="cardTitle">Market-sim comprehension task</div>
-        <div className="cardBody" style={{ display: "grid", gap: 10 }}>
-          <button className="button" onClick={newChallenge}>
-            New challenge
-          </button>
+        <div className="cardTitle">Timing Window</div>
+        <div className="cardBody" style={{ display: "grid", gap: 12 }}>
+          <div
+            style={{
+              height: 44,
+              borderRadius: 14,
+              background: "rgba(255,255,255,0.06)",
+              position: "relative",
+              overflow: "hidden",
+              border: "1px solid rgba(255,255,255,0.10)",
+            }}
+          >
+            {/* target window */}
+            <div
+              style={{
+                position: "absolute",
+                left: `${(0.5 - windowPct / 2) * 100}%`,
+                width: `${windowPct * 100}%`,
+                top: 0,
+                bottom: 0,
+                background: "linear-gradient(90deg, rgba(34,197,94,0.18), rgba(34,197,94,0.35), rgba(34,197,94,0.18))",
+              }}
+            />
 
-          {challenge ? (
-            <div style={{ display: "grid", gap: 8 }}>
-              <div style={{ opacity: 0.85, fontSize: 12 }}>expires: {new Date(challenge.expiresAt).toLocaleString()}</div>
-              <pre
-                style={{
-                  whiteSpace: "pre-wrap",
-                  background: "rgba(255,255,255,0.04)",
-                  padding: 12,
-                  borderRadius: 12,
-                  margin: 0,
-                }}
-              >
-                {challenge.instructions}
-              </pre>
-            </div>
-          ) : (
-            <div style={{ opacity: 0.8 }}>Click “New challenge” to start.</div>
-          )}
-        </div>
-      </div>
+            {/* moving marker */}
+            <div
+              style={{
+                position: "absolute",
+                left: `${progress * 100}%`,
+                top: 0,
+                bottom: 0,
+                width: 10,
+                transform: "translateX(-5px)",
+                background: "rgba(255,255,255,0.9)",
+                boxShadow: "0 0 20px rgba(255,255,255,0.25)",
+              }}
+            />
+          </div>
 
-      <div className="card">
-        <div className="kicker">Submit</div>
-        <div className="cardTitle">Your artifact</div>
-        <div className="cardBody" style={{ display: "grid", gap: 10 }}>
-          <textarea
-            value={artifact}
-            onChange={(e) => setArtifact(e.target.value)}
-            placeholder="Write your plan here. Include words like: entry, exit, risk, fail (verifier checks this for now)."
-            rows={7}
-            style={{ width: "100%", resize: "vertical" }}
-          />
-          <button className="button" disabled={!challenge || artifact.trim().length < 10} onClick={submit}>
-            Submit
-          </button>
-          {status ? <div style={{ opacity: 0.85 }}>{status}</div> : null}
-        </div>
-      </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {!running ? (
+              <button className="button" onClick={startRun} disabled={!challenge}>
+                Start
+              </button>
+            ) : (
+              <button className="button" onClick={() => stopRun(false)}>
+                Stop
+              </button>
+            )}
+            {lastScore !== null ? (
+              <div style={{ opacity: 0.9, alignSelf: "center" }}>Score: <b>{lastScore}</b></div>
+            ) : null}
+            {status ? <div style={{ opacity: 0.85, alignSelf: "center" }}>{status}</div> : null}
+          </div>
 
-      <div className="card">
-        <div className="kicker">Dev notes</div>
-        <div className="cardBody" style={{ opacity: 0.85 }}>
-          MVP verifier is intentionally simple/deterministic. Next iteration: real “artifact format” + stronger anti-sybil.
+          <div style={{ opacity: 0.75, fontSize: 13 }}>
+            Stop the marker inside the green window. Faster runs, higher streaks, more hash (coming).
+          </div>
         </div>
       </div>
     </div>

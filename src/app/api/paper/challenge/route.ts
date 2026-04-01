@@ -7,12 +7,21 @@ export const runtime = "nodejs";
 const BodySchema = z
   .object({
     sessionId: z.string().min(8),
+    mode: z.enum(["timing_window"]).optional(),
   })
   .strict();
 
 function newId(prefix: string) {
-  // short, URL-safe
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}`;
+}
+
+function dayMT() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Denver",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 export async function POST(req: Request) {
@@ -24,19 +33,53 @@ export async function POST(req: Request) {
 
   const challengeId = newId("ch");
   const now = Date.now();
-  const expiresAt = new Date(now + 1000 * 60 * 20).toISOString(); // 20m
+  const expiresAt = new Date(now + 1000 * 60 * 10).toISOString(); // 10m
 
-  // Deterministic seed. Keep it simple for MVP.
   const seed = crypto.randomUUID();
 
-  const instructions = [
-    "You are mining PAPER by doing market-sim comprehension.",
-    "Write a concise trade plan for a 1-minute BTC UP/DOWN round.",
-    "Include: entry condition, exit condition, risk cap, and one reason it might fail.",
-    "Keep it under 120 words.",
-  ].join("\n");
-
   const sb = supabaseServerAdmin();
+
+  // Daily cap (avoid farming). Best-effort if table exists.
+  const today = dayMT();
+  const maxPerDay = 200;
+
+  const { data: st, error: stErr } = await sb
+    .from("paper_session_state")
+    .select("session_id, day, challenges_issued")
+    .eq("session_id", body.data.sessionId)
+    .maybeSingle();
+
+  if (!stErr && st) {
+    const day = String((st as any).day || "");
+    const issued = Number((st as any).challenges_issued || 0);
+    const used = day === today ? issued : 0;
+    if (used >= maxPerDay) {
+      return NextResponse.json({ ok: false, error: "daily_cap" }, { status: 429 });
+    }
+  }
+
+  try {
+    await sb.from("paper_session_state").upsert(
+      {
+        session_id: body.data.sessionId,
+        day: today,
+        challenges_issued:
+          (st && String((st as any).day || "") === today ? Number((st as any).challenges_issued || 0) : 0) + 1,
+        updated_at: new Date().toISOString(),
+      } as any,
+      { onConflict: "session_id" }
+    );
+  } catch {
+    // ignore
+  }
+
+  // Timing Window params (simple + fun)
+  const windowPct = 0.12 + Math.random() * 0.10; // 12%..22%
+  const speed = 0.85 + Math.random() * 0.45; // feel tuning
+  const durationMs = 8000;
+
+  const instructions = "Stop the marker inside the green window.";
+
   const { error } = await sb.from("paper_challenges").insert({
     id: challengeId,
     session_id: body.data.sessionId,
@@ -46,7 +89,7 @@ export async function POST(req: Request) {
   });
 
   if (error) {
-    return NextResponse.json({ ok: false, error: "db_insert_failed" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "db_insert_failed", detail: error.message }, { status: 500 });
   }
 
   return NextResponse.json({
@@ -56,6 +99,12 @@ export async function POST(req: Request) {
       seed,
       instructions,
       expiresAt,
+      meta: {
+        mode: "timing_window",
+        windowPct,
+        speed,
+        durationMs,
+      },
     },
   });
 }
