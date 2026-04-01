@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     description: "Start a run. Stop in the window. Earn hash.",
     url: "https://mint-machine-site.vercel.app",
     siteName: "Mint Machine",
-    images: [{ url: "/ChatGPT%20Image%20Mar%2031%2C%202026%2C%2006_07_38%20PM.png", width: 1024, height: 1024 }],
+    images: [{ url: "/logo.png", width: 1024, height: 1024 }],
     locale: "en_US",
     type: "website",
   },
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Mint Machine",
     description: "Start a run. Stop in the window. Earn hash.",
-    images: ["/ChatGPT%20Image%20Mar%2031%2C%202026%2C%2006_07_38%20PM.png"],
+    images: ["/logo.png"],
   },
   icons: {
     icon: [{ url: "/favicon-32.png" }, { url: "/favicon-16.png" }],

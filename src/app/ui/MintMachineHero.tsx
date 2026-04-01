@@ -34,10 +34,10 @@ export function MintMachineHero({ printing }: { printing?: boolean }) {
 
       <div style={{ display: "grid", placeItems: "center", gap: 10, position: "relative" }}>
         <Image
-          src="/paperProtocolLogo.png"
-          alt="$PAPER"
-          width={140}
-          height={140}
+          src="/logo.png"
+          alt="Mint Machine"
+          width={160}
+          height={160}
           priority
           style={{
             borderRadius: 26,
