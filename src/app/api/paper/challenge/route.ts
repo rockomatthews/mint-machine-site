@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 const BodySchema = z
   .object({
     sessionId: z.string().min(8),
-    mode: z.enum(["timing_window"]).optional(),
+    mode: z.enum(["combo_tap"]).optional(),
   })
   .strict();
 
@@ -33,15 +33,15 @@ export async function POST(req: Request) {
 
   const challengeId = newId("ch");
   const now = Date.now();
-  const expiresAt = new Date(now + 1000 * 60 * 10).toISOString(); // 10m
+  const expiresAt = new Date(now + 1000 * 60 * 10).toISOString();
 
   const seed = crypto.randomUUID();
 
   const sb = supabaseServerAdmin();
 
-  // Daily cap (avoid farming). Best-effort if table exists.
+  // Best-effort daily cap. (Quiet protection; doesn’t bother the user)
   const today = dayMT();
-  const maxPerDay = 200;
+  const maxPerDay = 400;
 
   const { data: st, error: stErr } = await sb
     .from("paper_session_state")
@@ -73,12 +73,12 @@ export async function POST(req: Request) {
     // ignore
   }
 
-  // Timing Window params (simple + fun)
-  const windowPct = 0.12 + Math.random() * 0.10; // 12%..22%
-  const speed = 0.85 + Math.random() * 0.45; // feel tuning
-  const durationMs = 8000;
+  // Combo Tap params
+  const durationMs = 35_000;
+  const targetCount = 80; // may extend beyond via client regen
+  const targetSize = 74;
 
-  const instructions = "Stop the marker inside the green window.";
+  const instructions = "Tap targets to build combo. Miss breaks combo.";
 
   const { error } = await sb.from("paper_challenges").insert({
     id: challengeId,
@@ -100,10 +100,10 @@ export async function POST(req: Request) {
       instructions,
       expiresAt,
       meta: {
-        mode: "timing_window",
-        windowPct,
-        speed,
+        mode: "combo_tap",
         durationMs,
+        targetCount,
+        targetSize,
       },
     },
   });

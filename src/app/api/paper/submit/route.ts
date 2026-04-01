@@ -41,7 +41,7 @@ export async function POST(req: Request) {
 
   const { data: ch, error: chErr } = await sb
     .from("paper_challenges")
-    .select("id, session_id, seed, expires_at, instructions")
+    .select("id, session_id, seed, expires_at")
     .eq("id", challengeId)
     .maybeSingle();
 
@@ -49,7 +49,6 @@ export async function POST(req: Request) {
   if (ch.session_id !== sessionId) return NextResponse.json({ ok: false, error: "challenge_session_mismatch" }, { status: 403 });
   if (new Date(ch.expires_at).getTime() < Date.now()) return NextResponse.json({ ok: false, error: "challenge_expired" }, { status: 400 });
 
-  // Parse run artifact (client-reported for MVP; tightened later)
   let a: any = null;
   try {
     a = JSON.parse(artifact);
@@ -57,15 +56,19 @@ export async function POST(req: Request) {
     a = null;
   }
 
-  const mode = a?.mode === "timing_window" ? "timing_window" : "unknown";
-  const rawScore = Number(a?.score);
-  const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, Math.round(rawScore))) : 0;
+  const mode = a?.mode === "combo_tap" ? "combo_tap" : "unknown";
+  const score = Number.isFinite(Number(a?.score)) ? Math.max(0, Math.min(999, Math.round(Number(a?.score)))) : 0;
+  const hits = Number.isFinite(Number(a?.hits)) ? Math.max(0, Math.min(500, Math.round(Number(a?.hits)))) : 0;
+  const misses = Number.isFinite(Number(a?.misses)) ? Math.max(0, Math.min(500, Math.round(Number(a?.misses)))) : 0;
+  const maxCombo = Number.isFinite(Number(a?.maxCombo)) ? Math.max(0, Math.min(500, Math.round(Number(a?.maxCombo)))) : 0;
+  const elapsedMs = Number.isFinite(Number(a?.elapsedMs)) ? Math.max(0, Math.min(120000, Math.round(Number(a?.elapsedMs)))) : 0;
 
-  // Award curve (simple + fun)
-  // - Always give at least 1 for participation.
-  // - More for higher scores.
-  let basePoints = 1 + Math.floor(score / 12); // 1..9
-  if (score >= 95) basePoints += 2; // sweet spot bonus
+  // Award curve (fast feedback, capped)
+  // score 0..999 -> points 1..18-ish
+  let basePoints = 1 + Math.floor(score / 70); // 1..15
+  if (maxCombo >= 25) basePoints += 2;
+  if (maxCombo >= 40) basePoints += 2;
+  basePoints = Math.min(basePoints, 20);
 
   const submissionId = `sub_${crypto.randomUUID().replace(/-/g, "")}`;
 
@@ -75,11 +78,8 @@ export async function POST(req: Request) {
     session_id: sessionId,
     artifact,
     points: basePoints,
-    verdict: mode === "timing_window" ? "ok" : "rejected",
-    meta: {
-      mode,
-      score,
-    },
+    verdict: mode === "combo_tap" ? "ok" : "rejected",
+    meta: { mode, score, hits, misses, maxCombo, elapsedMs },
   });
 
   if (subErr) {
@@ -102,33 +102,28 @@ export async function POST(req: Request) {
     const prevStreak = Number((st as any)?.streak || 0);
     const nextStreak = prevStreak + 1;
 
-    // multiplier = min(1 + 0.04*streak, 1.5)
-    const mult = Math.min(1 + 0.04 * nextStreak, 1.5);
+    const mult = Math.min(1 + 0.03 * nextStreak, 1.35);
     awardedPoints = Math.max(1, Math.round(basePoints * mult));
     streak = nextStreak;
 
-    await sb
-      .from("paper_session_state")
-      .upsert(
-        {
-          session_id: sessionId,
-          day: today,
-          streak: nextStreak,
-          submissions_total: (sameDay ? Number((st as any)?.submissions_total || 0) : 0) + 1,
-          updated_at: new Date().toISOString(),
-        } as any,
-        { onConflict: "session_id" }
-      );
+    await sb.from("paper_session_state").upsert(
+      {
+        session_id: sessionId,
+        day: today,
+        streak: nextStreak,
+        submissions_total: (sameDay ? Number((st as any)?.submissions_total || 0) : 0) + 1,
+        updated_at: new Date().toISOString(),
+      } as any,
+      { onConflict: "session_id" }
+    );
   } catch {
     // ignore
   }
 
-  // Update balance
   if (awardedPoints > 0) {
     await sb.rpc("paper_add_points", { p_session_id: sessionId, p_points: awardedPoints });
   }
 
-  // Signed receipt (for future onchain claims)
   const key = process.env.RUN_SIGNING_KEY || "";
   const receiptPayload = {
     v: 1,
@@ -137,6 +132,10 @@ export async function POST(req: Request) {
     submissionId,
     mode,
     score,
+    hits,
+    misses,
+    maxCombo,
+    elapsedMs,
     points: awardedPoints,
     ts: new Date().toISOString(),
   };
@@ -147,8 +146,8 @@ export async function POST(req: Request) {
     submission: {
       id: submissionId,
       points: awardedPoints,
-      verdict: mode === "timing_window" ? "ok" : "rejected",
-      details: { score, streak },
+      verdict: mode === "combo_tap" ? "ok" : "rejected",
+      details: { score, hits, misses, maxCombo, streak },
       receipt,
     },
   });

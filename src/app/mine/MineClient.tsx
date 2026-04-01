@@ -9,10 +9,10 @@ type Challenge = {
   instructions: string;
   expiresAt: string;
   meta?: {
-    mode: "timing_window";
-    windowPct: number; // 0..1
-    speed: number; // px/s normalized-ish
+    mode: "combo_tap";
     durationMs: number;
+    targetCount: number;
+    targetSize: number; // px
   };
 };
 
@@ -31,6 +31,35 @@ function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
 }
 
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashSeed(s: string) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+type Target = {
+  i: number;
+  x: number; // 0..1
+  y: number; // 0..1
+  shownAtMs: number;
+  hitAtMs?: number;
+  miss?: boolean;
+};
+
 export default function MineClient() {
   const sessionId = useMemo(() => getSessionId(), []);
 
@@ -41,13 +70,18 @@ export default function MineClient() {
 
   // run state
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState(0); // 0..1 moving bar
-  const [lastScore, setLastScore] = useState<number | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const dirRef = useRef<1 | -1>(1);
-  const tRef = useRef<number>(0);
+  const [timeLeftMs, setTimeLeftMs] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
+  const [hits, setHits] = useState(0);
+  const [misses, setMisses] = useState(0);
+  const [score, setScore] = useState<number | null>(null);
+
+  const targetsRef = useRef<Target[]>([]);
+  const activeIndexRef = useRef<number>(0);
+  const tickTimerRef = useRef<number | null>(null);
   const startedAtRef = useRef<number>(0);
-  const progressRef = useRef<number>(0);
+  const seedRandRef = useRef<(() => number) | null>(null);
 
   async function refreshMe() {
     const res = await fetch(`/api/paper/me?sessionId=${encodeURIComponent(sessionId)}`);
@@ -57,15 +91,13 @@ export default function MineClient() {
 
   async function newChallenge() {
     setStatus("");
-    setLastScore(null);
+    setScore(null);
     setRunning(false);
-    progressRef.current = 0;
-    setProgress(0);
 
     const res = await fetch("/api/paper/challenge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, mode: "timing_window" }),
+      body: JSON.stringify({ sessionId, mode: "combo_tap" }),
     });
     const j = await res.json();
     if (!j?.ok) {
@@ -75,81 +107,74 @@ export default function MineClient() {
     setChallenge(j.challenge);
   }
 
+  function buildTargets(seed: string, meta: NonNullable<Challenge["meta"]>) {
+    const rand = mulberry32(hashSeed(seed));
+    seedRandRef.current = rand;
+
+    const t: Target[] = [];
+    const count = meta.targetCount;
+    for (let i = 0; i < count; i++) {
+      // keep away from edges
+      const x = 0.08 + rand() * 0.84;
+      const y = 0.12 + rand() * 0.76;
+      t.push({ i, x, y, shownAtMs: i === 0 ? 0 : -1 });
+    }
+    targetsRef.current = t;
+    activeIndexRef.current = 0;
+  }
+
   function startRun() {
-    if (!challenge) return;
-    setStatus("");
-    setLastScore(null);
-    setRunning(true);
+    if (!challenge?.meta) return;
+
     setPrinting(true);
+    window.setTimeout(() => setPrinting(false), 650);
 
-    // init motion
-    dirRef.current = Math.random() > 0.5 ? 1 : -1;
-    tRef.current = 0;
+    setStatus("");
+    setRunning(true);
+    setScore(null);
+    setCombo(0);
+    setMaxCombo(0);
+    setHits(0);
+    setMisses(0);
+
     startedAtRef.current = performance.now();
+    setTimeLeftMs(challenge.meta.durationMs);
+    buildTargets(challenge.seed, challenge.meta);
 
-    const durationMs = challenge.meta?.durationMs ?? 8000;
-    const speed = challenge.meta?.speed ?? 0.9;
+    // mark first shown
+    targetsRef.current[0].shownAtMs = 0;
 
-    const tick = (now: number) => {
-      const dt = now - (startedAtRef.current + tRef.current);
-      tRef.current += dt;
-
-      // move progress back/forth
-      const move = (dt / 1000) * speed * 0.6; // tuned for feel
-      let p = progressRef.current + move * dirRef.current;
-      if (p >= 1) {
-        p = 1;
-        dirRef.current = -1;
-      }
-      if (p <= 0) {
-        p = 0;
-        dirRef.current = 1;
-      }
-      progressRef.current = p;
-      setProgress(p);
-
-      if (tRef.current >= durationMs) {
-        // auto-stop at end
-        stopRun(true);
-        return;
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
-
-    window.setTimeout(() => setPrinting(false), 900);
+    if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
+    tickTimerRef.current = window.setInterval(() => {
+      const elapsed = performance.now() - startedAtRef.current;
+      const left = Math.max(0, challenge.meta!.durationMs - elapsed);
+      setTimeLeftMs(left);
+      if (left <= 0) stopRun(true);
+    }, 60);
   }
 
   async function stopRun(auto = false) {
-    if (!challenge) return;
+    if (!challenge?.meta) return;
     if (!running) return;
 
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
-
     setRunning(false);
+    if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
+    tickTimerRef.current = null;
 
-    const windowPct = clamp(challenge.meta?.windowPct ?? 0.14, 0.06, 0.35);
-    const center = 0.5;
-    const dist = Math.abs(progressRef.current - center);
-    const halfWindow = windowPct / 2;
+    const durationMs = challenge.meta.durationMs;
+    const elapsedMs = clamp(performance.now() - startedAtRef.current, 0, durationMs);
 
-    // score: 0..100
-    let score = 0;
-    if (dist <= halfWindow) {
-      // inside window: higher is better (closer to center)
-      score = Math.round((1 - dist / halfWindow) * 100);
-    } else {
-      // outside: still give small score so it doesn't feel punishing
-      const maxDist = 0.5;
-      const outside = clamp((dist - halfWindow) / (maxDist - halfWindow), 0, 1);
-      score = Math.round((1 - outside) * 15);
-    }
+    // compute score: skill * speed * accuracy
+    const total = hits + misses;
+    const accuracy = total ? hits / total : 0;
+    const speed = hits ? Math.min(1.6, (hits / (elapsedMs / 1000)) / 6) : 0; // normalized
 
-    setLastScore(score);
+    // base score favors maxCombo heavily (skill ceiling)
+    const raw = Math.round(maxCombo * 18 + hits * 4 + accuracy * 40 + speed * 25 - misses * 3);
+    const finalScore = clamp(raw, 0, 999);
+    setScore(finalScore);
 
-    // submit to server for points + leaderboard
+    // submit receipt
     setStatus(auto ? "Time!" : "");
     const res = await fetch("/api/paper/submit", {
       method: "POST",
@@ -157,7 +182,14 @@ export default function MineClient() {
       body: JSON.stringify({
         sessionId,
         challengeId: challenge.id,
-        artifact: JSON.stringify({ mode: "timing_window", score, progress: progressRef.current, auto }),
+        artifact: JSON.stringify({
+          mode: "combo_tap",
+          score: finalScore,
+          hits,
+          misses,
+          maxCombo,
+          elapsedMs: Math.round(elapsedMs),
+        }),
       }),
     });
 
@@ -172,25 +204,74 @@ export default function MineClient() {
       import("canvas-confetti")
         .then((m: any) => {
           const confetti = m.default || m;
-          confetti({ particleCount: 70, spread: 65, origin: { y: 0.7 }, colors: ["#22c55e", "#c7f9cc", "#e7f2e8"] });
+          confetti({ particleCount: 80, spread: 70, origin: { y: 0.7 }, colors: ["#FDD104", "#013473", "#E6E7E6"] });
         })
         .catch(() => {});
     }
 
     setStatus(`+${gained} hash`);
     await refreshMe();
+
+    // auto-refresh challenge for “one more run”
+    await newChallenge();
+  }
+
+  function onHitTarget() {
+    if (!running || !challenge?.meta) return;
+
+    const idx = activeIndexRef.current;
+    const t = targetsRef.current[idx];
+    if (!t) return;
+
+    const elapsed = performance.now() - startedAtRef.current;
+    t.hitAtMs = Math.round(elapsed);
+
+    const nextCombo = combo + 1;
+    setCombo(nextCombo);
+    setMaxCombo((m) => Math.max(m, nextCombo));
+    setHits((h) => h + 1);
+
+    // next target
+    const nextIdx = idx + 1;
+    activeIndexRef.current = nextIdx;
+    if (targetsRef.current[nextIdx]) {
+      targetsRef.current[nextIdx].shownAtMs = Math.round(elapsed);
+    } else {
+      // loop more targets by regenerating a new one based on seedRand
+      const rand = seedRandRef.current || Math.random;
+      const x = 0.08 + rand() * 0.84;
+      const y = 0.12 + rand() * 0.76;
+      targetsRef.current.push({ i: nextIdx, x, y, shownAtMs: Math.round(elapsed) });
+    }
+
+    // force rerender for target move
+    setTimeLeftMs((x) => x);
+  }
+
+  function onMiss() {
+    if (!running) return;
+    setCombo(0);
+    setMisses((m) => m + 1);
   }
 
   useEffect(() => {
     refreshMe();
     newChallenge();
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const windowPct = clamp(challenge?.meta?.windowPct ?? 0.14, 0.06, 0.35);
+  const meta = challenge?.meta;
+  const targetSize = meta?.targetSize ?? 74;
+
+  const idx = activeIndexRef.current;
+  const target = targetsRef.current[idx];
+
+  const questA = maxCombo >= 20;
+  const questB = hits >= 25;
+  const questC = misses <= 3 && hits >= 20;
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
@@ -206,71 +287,134 @@ export default function MineClient() {
             <a className="button" href="/leaderboard" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
               Leaderboard
             </a>
-            <button className="button" onClick={newChallenge} disabled={running}>
-              New run
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="cardTitle">Timing Window</div>
-        <div className="cardBody" style={{ display: "grid", gap: 12 }}>
-          <div
-            style={{
-              height: 44,
-              borderRadius: 14,
-              background: "rgba(255,255,255,0.06)",
-              position: "relative",
-              overflow: "hidden",
-              border: "1px solid rgba(255,255,255,0.10)",
-            }}
-          >
-            {/* target window */}
-            <div
-              style={{
-                position: "absolute",
-                left: `${(0.5 - windowPct / 2) * 100}%`,
-                width: `${windowPct * 100}%`,
-                top: 0,
-                bottom: 0,
-                background: "linear-gradient(90deg, rgba(34,197,94,0.18), rgba(34,197,94,0.35), rgba(34,197,94,0.18))",
-              }}
-            />
-
-            {/* moving marker */}
-            <div
-              style={{
-                position: "absolute",
-                left: `${progress * 100}%`,
-                top: 0,
-                bottom: 0,
-                width: 10,
-                transform: "translateX(-5px)",
-                background: "rgba(255,255,255,0.9)",
-                boxShadow: "0 0 20px rgba(255,255,255,0.25)",
-              }}
-            />
-          </div>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {!running ? (
-              <button className="button" onClick={startRun} disabled={!challenge}>
-                Start
+              <button className="button" onClick={startRun} disabled={!challenge?.meta}>
+                Start run
               </button>
             ) : (
               <button className="button" onClick={() => stopRun(false)}>
                 Stop
               </button>
             )}
-            {lastScore !== null ? (
-              <div style={{ opacity: 0.9, alignSelf: "center" }}>Score: <b>{lastScore}</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="cardTitle">Combo Tap</div>
+        <div className="cardBody" style={{ display: "grid", gap: 12 }}>
+          <div
+            onClick={onMiss}
+            style={{
+              height: 320,
+              borderRadius: 18,
+              background:
+                "radial-gradient(900px 420px at 20% 0%, rgba(253,209,4,0.10), transparent 60%), radial-gradient(900px 420px at 85% 20%, rgba(1,52,115,0.22), transparent 55%), rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.10)",
+              position: "relative",
+              overflow: "hidden",
+              cursor: running ? "crosshair" : "default",
+              userSelect: "none",
+            }}
+          >
+            {/* HUD */}
+            <div
+              style={{
+                position: "absolute",
+                top: 12,
+                left: 12,
+                right: 12,
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 10,
+                fontSize: 13,
+                opacity: 0.9,
+              }}
+            >
+              <div>
+                Time: <b>{Math.ceil(timeLeftMs / 1000)}</b>s
+              </div>
+              <div>
+                Combo: <b>{combo}</b> (max {maxCombo})
+              </div>
+              <div>
+                Hits: <b>{hits}</b> · Miss: {misses}
+              </div>
+            </div>
+
+            {/* Active target */}
+            {running && target ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onHitTarget();
+                }}
+                style={{
+                  position: "absolute",
+                  left: `calc(${(target.x * 100).toFixed(2)}% - ${targetSize / 2}px)`,
+                  top: `calc(${(target.y * 100).toFixed(2)}% - ${targetSize / 2}px)`,
+                  width: targetSize,
+                  height: targetSize,
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.20)",
+                  background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(253,209,4,0.95) 45%, rgba(1,52,115,0.85))",
+                  boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+                  cursor: "pointer",
+                }}
+                aria-label="target"
+              />
             ) : null}
-            {status ? <div style={{ opacity: 0.85, alignSelf: "center" }}>{status}</div> : null}
+
+            {/* Results overlay */}
+            {!running && score !== null ? (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  padding: 18,
+                }}
+              >
+                <div
+                  style={{
+                    background: "rgba(0,0,0,0.45)",
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    borderRadius: 18,
+                    padding: 18,
+                    width: "min(520px, 95%)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                    <div style={{ fontWeight: 950, fontSize: 20, letterSpacing: -0.4 }}>Run complete</div>
+                    <div style={{ opacity: 0.8 }}>Score: <b>{score}</b></div>
+                  </div>
+                  <div style={{ opacity: 0.85, marginTop: 8, lineHeight: 1.6 }}>
+                    Max combo <b>{maxCombo}</b> · Hits <b>{hits}</b> · Misses <b>{misses}</b>
+                  </div>
+                  {status ? <div style={{ marginTop: 10, fontWeight: 900 }}>{status}</div> : null}
+                </div>
+              </div>
+            ) : null}
+
+            {!running && score === null ? (
+              <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: 0.85 }}>
+                Click <b>Start run</b>.
+              </div>
+            ) : null}
           </div>
 
-          <div style={{ opacity: 0.75, fontSize: 13 }}>
-            Stop the marker inside the green window. Faster runs, higher streaks, more hash (coming).
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            {status ? <div style={{ opacity: 0.9 }}>{status}</div> : null}
+            {running ? <div style={{ opacity: 0.7, fontSize: 13 }}>Tap the glowing dot. Clicking empty space breaks combo.</div> : null}
+          </div>
+
+          {/* Daily quests (directive, not questions) */}
+          <div style={{ opacity: 0.85, fontSize: 13, lineHeight: 1.7 }}>
+            <b>Daily quests</b>
+            <br />• Hit a 20x combo {questA ? "✓" : ""}
+            <br />• Get 25 hits in one run {questB ? "✓" : ""}
+            <br />• Finish with ≤ 3 misses (and 20+ hits) {questC ? "✓" : ""}
           </div>
         </div>
       </div>
