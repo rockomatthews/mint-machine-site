@@ -6,23 +6,23 @@ import { Providers } from "./Providers";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://paperprotocol.xyz"),
-  title: "PAPER Protocol — Mine by Playing",
-  description: "Fun market-sim comprehension mining. Earn $PAPER, tip creators, and build the arena.",
+  metadataBase: new URL("https://mint-machine-site.vercel.app"),
+  title: "Mint Machine — Arcade Mining",
+  description: "Start a run. Stop in the window. Earn hash.",
   openGraph: {
-    title: "PAPER Protocol",
-    description: "Fun market-sim comprehension mining. Earn $PAPER, tip creators, and build the arena.",
-    url: "https://paperprotocol.xyz",
-    siteName: "PAPER Protocol",
-    images: [{ url: "/og.png", width: 1200, height: 630 }],
+    title: "Mint Machine",
+    description: "Start a run. Stop in the window. Earn hash.",
+    url: "https://mint-machine-site.vercel.app",
+    siteName: "Mint Machine",
+    images: [{ url: "/ChatGPT%20Image%20Mar%2031%2C%202026%2C%2006_07_38%20PM.png", width: 1024, height: 1024 }],
     locale: "en_US",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "PAPER Protocol",
-    description: "Fun market-sim comprehension mining. Earn $PAPER, tip creators, and build the arena.",
-    images: ["/og.png"],
+    title: "Mint Machine",
+    description: "Start a run. Stop in the window. Earn hash.",
+    images: ["/ChatGPT%20Image%20Mar%2031%2C%202026%2C%2006_07_38%20PM.png"],
   },
   icons: {
     icon: [{ url: "/favicon-32.png" }, { url: "/favicon-16.png" }],
