@@ -1,14 +1,5 @@
 import Link from "next/link";
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Container,
-  Stack,
-  Typography,
-} from "@mui/material";
+import { Box, Button, Card, CardContent, Chip, Container, Stack, Typography } from "@mui/material";
 
 import { AppShell } from "./ui/AppShell";
 import { MintMachineHero } from "./ui/MintMachineHero";
@@ -20,10 +11,10 @@ export default function Home() {
         <Stack spacing={2.25}>
           <Stack spacing={0.75}>
             <Typography variant="h3" sx={{ fontWeight: 950, letterSpacing: -0.9, lineHeight: 1.05 }}>
-              PAPER Protocol
+              Mint Machine
             </Typography>
-            <Typography sx={{ opacity: 0.85, maxWidth: 780 }}>
-              Mine <b>$PAPER</b> by proving you understand markets.
+            <Typography sx={{ opacity: 0.86, maxWidth: 780 }}>
+              Start a run. Stop in the window. Earn hash.
             </Typography>
           </Stack>
 
@@ -37,14 +28,14 @@ export default function Home() {
               gap: 1.5,
             }}
           >
-            <Card sx={{ border: "1px solid rgba(34,197,94,0.22)" }}>
+            <Card>
               <CardContent>
                 <Chip label="STEP 1" size="small" sx={{ fontWeight: 900, mb: 1 }} />
                 <Typography variant="h5" sx={{ fontWeight: 950, letterSpacing: -0.6 }}>
-                  Mine $PAPER
+                  Play
                 </Typography>
                 <Typography sx={{ opacity: 0.85, mt: 0.75, lineHeight: 1.55 }}>
-                  Answer questions correctly. Earn claimable points. No wallet signatures during mining.
+                  Tap <b>Start</b>, then <b>Stop</b> inside the green window.
                 </Typography>
               </CardContent>
             </Card>
@@ -53,10 +44,10 @@ export default function Home() {
               <CardContent>
                 <Chip label="STEP 2" size="small" sx={{ fontWeight: 900, mb: 1 }} />
                 <Typography variant="h5" sx={{ fontWeight: 950, letterSpacing: -0.6 }}>
-                  Climb the leaderboard
+                  Earn
                 </Typography>
                 <Typography sx={{ opacity: 0.85, mt: 0.75, lineHeight: 1.55 }}>
-                  Higher rank = more rewards when claiming goes live.
+                  Your score converts to <b>hash</b>. Higher skill = higher hash.
                 </Typography>
               </CardContent>
             </Card>
@@ -65,10 +56,10 @@ export default function Home() {
               <CardContent>
                 <Chip label="STEP 3" size="small" sx={{ fontWeight: 900, mb: 1 }} />
                 <Typography variant="h5" sx={{ fontWeight: 950, letterSpacing: -0.6 }}>
-                  Buy & trade $PAPER
+                  Compete
                 </Typography>
                 <Typography sx={{ opacity: 0.85, mt: 0.75, lineHeight: 1.55 }}>
-                  Coming soon. We’ll only deploy the token on Base after explicit go‑live approval.
+                  Climb the leaderboard. Prizes unlock later when the project is big enough.
                 </Typography>
               </CardContent>
             </Card>
@@ -77,21 +68,18 @@ export default function Home() {
           {/* Primary actions */}
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
             <Button component={Link} href="/mine" variant="contained" size="large" sx={{ fontWeight: 950 }}>
-              Start mining
+              Start run
             </Button>
             <Button component={Link} href="/leaderboard" variant="outlined" size="large" sx={{ fontWeight: 900 }}>
-              View leaderboard
+              Leaderboard
             </Button>
-            <Button component={Link} href="/token" variant="text" size="large" sx={{ fontWeight: 900 }}>
-              $PAPER token
-            </Button>
-            <Button component={Link} href="/safety" variant="text" size="large" sx={{ fontWeight: 800, opacity: 0.9 }}>
-              Safety
+            <Button component={Link} href="/prize" variant="text" size="large" sx={{ fontWeight: 900 }}>
+              Prize
             </Button>
           </Stack>
 
           <Typography sx={{ opacity: 0.7, fontSize: 13, lineHeight: 1.7 }}>
-            Hybrid mode: fun UI, serious rules. No seed phrases. No private keys.
+            No seed phrases. No private keys. Wallet connect + onchain claim comes later.
           </Typography>
         </Stack>
       </Container>
