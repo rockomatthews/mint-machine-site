@@ -60,6 +60,8 @@ export async function createRunnerGame(
       );
       // Our logo as the player piece (mirrored)
       this.load.image("mm_logo", "/logo.png");
+      // New coin sprite
+      this.load.image("washington_coin", "/washingtoncoin.png");
     }
 
     create() {
@@ -167,12 +169,29 @@ export async function createRunnerGame(
     }
 
     spawnCoin() {
-      const key = "platformIndustrial_079.png";
-      const y = opts.height - 48 - 120 - rand() * 90;
-      const c = this.coins.create(opts.width + 80, y, "industrial", key) as Phaser.Physics.Arcade.Sprite;
-      c.setScale(0.55);
+      const y = opts.height - 48 - 140 - rand() * 110;
+
+      // Use washington coin sprite (pretty, branded)
+      const c = this.coins.create(opts.width + 80, y, "washington_coin") as Phaser.Physics.Arcade.Sprite;
+      c.setScale(0.12);
       c.setVelocityX(-this.speed);
-      c.setDepth(2);
+      c.setDepth(3);
+
+      // Slight bob/rotation for juice
+      this.tweens.add({
+        targets: c,
+        y: y - 10,
+        duration: 650,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+      this.tweens.add({
+        targets: c,
+        angle: 360,
+        duration: 1200,
+        repeat: -1,
+      });
     }
 
     update() {
