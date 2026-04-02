@@ -61,9 +61,9 @@ export async function createRunnerGame(
         `${ASSET_BASE}/platformIndustrial_sheet.png`,
         `${ASSET_BASE}/platformIndustrial_sheet.xml`
       );
-      // Our logo as the player piece (mirrored)
-      this.load.image("mm_logo", "/logo.png");
-      // New coin sprite
+      // Player piece
+      this.load.image("mm_piece", "/washingtonGamePiece.png");
+      // Coin sprite
       this.load.image("washington_coin", "/washingtoncoin.png");
     }
 
@@ -83,11 +83,9 @@ export async function createRunnerGame(
         g.refreshBody();
       }
 
-      // player (mirrored logo)
-      // Spawn a bit higher so jumps clear early obstacles (logo sprite is visually tall)
-      this.player = this.physics.add.sprite(140, groundY - 120, "mm_logo");
-      this.player.setFlipX(true);
-      this.player.setScale(0.18);
+      // player piece
+      this.player = this.physics.add.sprite(140, groundY - 120, "mm_piece");
+      this.player.setScale(0.22);
       this.player.setCollideWorldBounds(true);
       this.player.setBounce(0);
       this.player.setDepth(2);
@@ -201,12 +199,7 @@ export async function createRunnerGame(
         repeat: -1,
         ease: "Sine.easeInOut",
       });
-      this.tweens.add({
-        targets: c,
-        angle: 360,
-        duration: 1200,
-        repeat: -1,
-      });
+      // no spin (keep bounce only)
     }
 
     update() {
