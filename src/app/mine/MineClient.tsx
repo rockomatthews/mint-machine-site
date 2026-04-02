@@ -209,7 +209,13 @@ export default function MineClient() {
         .catch(() => {});
     }
 
-    setStatus(`+${gained} hash`);
+    const runId = j?.submission?.id;
+    if (runId) {
+      setStatus(`+${gained} hash · Run card: /run/${String(runId)}`);
+    } else {
+      setStatus(`+${gained} hash`);
+    }
+
     await refreshMe();
 
     // auto-refresh challenge for “one more run”
@@ -405,7 +411,20 @@ export default function MineClient() {
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            {status ? <div style={{ opacity: 0.9 }}>{status}</div> : null}
+            {status ? (
+              <div style={{ opacity: 0.9 }}>
+                {status.includes("/run/") ? (
+                  <>
+                    {status.split("/run/")[0]}
+                    <a href={`/run/${status.split("/run/")[1]}`} style={{ fontWeight: 900 }}>
+                      /run/{status.split("/run/")[1]}
+                    </a>
+                  </>
+                ) : (
+                  status
+                )}
+              </div>
+            ) : null}
             {running ? <div style={{ opacity: 0.7, fontSize: 13 }}>Tap the glowing dot. Clicking empty space breaks combo.</div> : null}
           </div>
 

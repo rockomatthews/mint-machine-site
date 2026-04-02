@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
+import { avatarUrlFromSessionId, codenameFromSessionId } from "../_identity";
 
 type Row = {
   rank: number;
@@ -35,18 +37,10 @@ export default function LeaderboardClient() {
     <div className="card" style={{ marginTop: 16 }}>
       <div className="cardBody" style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
         <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="button"
-            onClick={() => setScope("today")}
-            style={{ opacity: scope === "today" ? 1 : 0.65 }}
-          >
+          <button className="button" onClick={() => setScope("today")} style={{ opacity: scope === "today" ? 1 : 0.65 }}>
             Today
           </button>
-          <button
-            className="button"
-            onClick={() => setScope("alltime")}
-            style={{ opacity: scope === "alltime" ? 1 : 0.65 }}
-          >
+          <button className="button" onClick={() => setScope("alltime")} style={{ opacity: scope === "alltime" ? 1 : 0.65 }}>
             All‑time
           </button>
         </div>
@@ -62,22 +56,27 @@ export default function LeaderboardClient() {
           <thead>
             <tr style={{ textAlign: "left", opacity: 0.7 }}>
               <th style={{ padding: "10px 16px" }}>Rank</th>
-              <th style={{ padding: "10px 6px" }}>Miner</th>
+              <th style={{ padding: "10px 6px" }}>Operator</th>
               <th style={{ padding: "10px 16px", textAlign: "right" }}>Hash</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.sessionId} style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-                <td style={{ padding: "10px 16px" }}>{r.rank}</td>
-                <td style={{ padding: "10px 6px" }}>
-                  <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" }}>
-                    {r.sessionId.slice(0, 10)}…
-                  </span>
-                </td>
-                <td style={{ padding: "10px 16px", fontWeight: 900, textAlign: "right" }}>{r.points}</td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              const name = codenameFromSessionId(r.sessionId);
+              const avatar = avatarUrlFromSessionId(r.sessionId);
+              return (
+                <tr key={r.sessionId} style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                  <td style={{ padding: "10px 16px" }}>{r.rank}</td>
+                  <td style={{ padding: "10px 6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <Image src={avatar} alt={name} width={28} height={28} style={{ borderRadius: 10 }} />
+                      <div style={{ fontWeight: 900 }}>{name}</div>
+                    </div>
+                  </td>
+                  <td style={{ padding: "10px 16px", fontWeight: 900, textAlign: "right" }}>{r.points}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       ) : !status ? (
