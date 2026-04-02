@@ -52,6 +52,9 @@ export async function createRunnerGame(
     coins!: Phaser.Physics.Arcade.Group;
     cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
 
+    // Double-jump: allow 1 extra jump while airborne.
+    airJumpAvailable = false;
+
     preload() {
       this.load.atlasXML(
         "industrial",
@@ -153,8 +156,19 @@ export async function createRunnerGame(
     tryJump() {
       if (this.isGameOver) return;
       const body = this.player.body as Phaser.Physics.Arcade.Body;
-      if (body.blocked.down || body.touching.down) {
-        this.player.setVelocityY(-620);
+
+      const grounded = body.blocked.down || body.touching.down;
+      if (grounded) {
+        this.airJumpAvailable = true;
+        this.player.setVelocityY(-690);
+        return;
+      }
+
+      // mid-air jump (one time)
+      if (this.airJumpAvailable) {
+        this.airJumpAvailable = false;
+        // keep it slightly weaker than the first jump
+        this.player.setVelocityY(-640);
       }
     }
 
@@ -163,7 +177,8 @@ export async function createRunnerGame(
       const y = opts.height - 48 - 35;
       const o = this.obstacles.create(opts.width + 80, y, "industrial", key) as Phaser.Physics.Arcade.Sprite;
       o.setOrigin(0.5, 0.5);
-      o.setScale(0.9);
+      // Slightly smaller obstacles = fairer early game
+      o.setScale(0.78);
       o.setVelocityX(-this.speed);
       o.setDepth(2);
     }
@@ -196,6 +211,12 @@ export async function createRunnerGame(
 
     update() {
       if (this.isGameOver) return;
+
+      const body = this.player.body as Phaser.Physics.Arcade.Body;
+      if (body.blocked.down || body.touching.down) {
+        // regain air jump once you land
+        this.airJumpAvailable = true;
+      }
 
       if (this.cursors?.space?.isDown || this.cursors?.up?.isDown) {
         this.tryJump();
