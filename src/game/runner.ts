@@ -44,7 +44,8 @@ export async function createRunnerGame(
   class RunnerScene extends Phaser.Scene {
     score = 0;
     startedAt = 0;
-    speed = 260;
+    // Start easier; ramp up over time.
+    speed = 210;
     player!: Phaser.Physics.Arcade.Sprite;
     ground!: Phaser.Physics.Arcade.StaticGroup;
     obstacles!: Phaser.Physics.Arcade.Group;
@@ -57,6 +58,8 @@ export async function createRunnerGame(
         `${ASSET_BASE}/platformIndustrial_sheet.png`,
         `${ASSET_BASE}/platformIndustrial_sheet.xml`
       );
+      // Our logo as the player piece (mirrored)
+      this.load.image("mm_logo", "/logo.png");
     }
 
     create() {
@@ -75,13 +78,17 @@ export async function createRunnerGame(
         g.refreshBody();
       }
 
-      // player
-      const pKey = "platformIndustrial_086.png"; // chunky block tile works as a bot
-      this.player = this.physics.add.sprite(140, groundY - 70, "industrial", pKey);
-      this.player.setScale(0.9);
+      // player (mirrored logo)
+      this.player = this.physics.add.sprite(140, groundY - 86, "mm_logo");
+      this.player.setFlipX(true);
+      this.player.setScale(0.18);
       this.player.setCollideWorldBounds(true);
       this.player.setBounce(0);
       this.player.setDepth(2);
+
+      // tighten hitbox to feel fair
+      const body = this.player.body as Phaser.Physics.Arcade.Body;
+      body.setSize(this.player.width * 0.62, this.player.height * 0.62, true);
 
       this.physics.add.collider(this.player, this.ground);
 
@@ -106,15 +113,21 @@ export async function createRunnerGame(
       // tap/click jump
       this.input.on("pointerdown", () => this.tryJump());
 
-      // spawn timer
+      // spawn timer (start easy, ramp)
       this.time.addEvent({
-        delay: 900,
+        delay: 1100,
         loop: true,
         callback: () => {
           if (this.isGameOver) return;
-          if (rand() < 0.72) this.spawnObstacle();
-          if (rand() < 0.40) this.spawnCoin();
-          this.speed = Math.min(520, this.speed + 3);
+
+          const elapsedS = (this.time.now - this.startedAt) / 1000;
+          const obstacleP = Math.min(0.78, 0.42 + elapsedS * 0.006); // ramps over time
+          const coinP = Math.max(0.28, 0.48 - elapsedS * 0.003);
+
+          if (rand() < obstacleP) this.spawnObstacle();
+          if (rand() < coinP) this.spawnCoin();
+
+          this.speed = Math.min(520, this.speed + 2);
         },
       });
 
