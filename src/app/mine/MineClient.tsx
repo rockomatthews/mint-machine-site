@@ -28,14 +28,28 @@ function getSessionId() {
   return v;
 }
 
+let _touchMoveHandler: any = null;
 function lockBodyScroll(lock: boolean) {
   if (typeof document === "undefined") return;
+
+  // Mobile-safe scroll lock. Avoid globally setting touchAction:none (can break taps on some browsers).
   if (lock) {
     document.body.style.overflow = "hidden";
-    document.body.style.touchAction = "none";
+    (document.body.style as any).overscrollBehavior = "none";
+    if (!_touchMoveHandler) {
+      _touchMoveHandler = (e: TouchEvent) => {
+        // Prevent page scrolling while the game is running.
+        e.preventDefault();
+      };
+      document.addEventListener("touchmove", _touchMoveHandler, { passive: false });
+    }
   } else {
     document.body.style.overflow = "";
-    document.body.style.touchAction = "";
+    (document.body.style as any).overscrollBehavior = "";
+    if (_touchMoveHandler) {
+      document.removeEventListener("touchmove", _touchMoveHandler);
+      _touchMoveHandler = null;
+    }
   }
 }
 
@@ -79,53 +93,67 @@ export default function MineClient() {
     setPrinting(true);
     window.setTimeout(() => setPrinting(false), 500);
 
+    setStatus("Loading game...");
+
     // Clear any previous canvas
     mountRef.current.innerHTML = "";
 
-    const Phaser = (await import("phaser")).default;
-    const { createRunnerGame } = await import("../../game/runner");
-
     setRunning(true);
     lockBodyScroll(true);
-    setStatus("");
     setScore(0);
 
-    const w = Math.min(980, Math.max(320, mountRef.current.clientWidth));
+    // Ensure layout has measured on mobile before sizing canvas
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+    const mount = mountRef.current;
+    const measuredW = mount?.clientWidth || 0;
+    const w = Math.min(980, Math.max(320, measuredW || window.innerWidth - 32));
     const h = Math.round(w * 0.62);
 
-    gameRef.current = await createRunnerGame(
-      Phaser as any,
-      mountRef.current,
-      { seed: challenge.seed, width: w, height: h },
-      {
-        onScore: (s) => setScore(s),
-        onGameOver: async (finalScore) => {
-          setRunning(false);
-          lockBodyScroll(false);
+    try {
+      const Phaser = (await import("phaser")).default;
+      const { createRunnerGame } = await import("../../game/runner");
 
-          try {
-            const res = await fetch("/api/paper/submit", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                sessionId,
-                challengeId: challenge.id,
-                artifact: JSON.stringify({ mode: "runner_v1", score: finalScore }),
-              }),
-            });
-            const j = await res.json();
-            const gained = j?.submission?.points ?? 0;
-            const runId = j?.submission?.id;
-            if (runId) setStatus(`+${gained} hash · /run/${String(runId)}`);
-            else setStatus(`+${gained} hash`);
-            await refreshMe();
-            await newChallenge();
-          } catch {
-            setStatus("Submit failed");
-          }
-        },
-      }
-    );
+      setStatus("");
+
+      gameRef.current = await createRunnerGame(
+        Phaser as any,
+        mount,
+        { seed: challenge.seed, width: w, height: h },
+        {
+          onScore: (s) => setScore(s),
+          onGameOver: async (finalScore) => {
+            setRunning(false);
+            lockBodyScroll(false);
+
+            try {
+              const res = await fetch("/api/paper/submit", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  sessionId,
+                  challengeId: challenge.id,
+                  artifact: JSON.stringify({ mode: "runner_v1", score: finalScore }),
+                }),
+              });
+              const j = await res.json();
+              const gained = j?.submission?.points ?? 0;
+              const runId = j?.submission?.id;
+              if (runId) setStatus(`+${gained} hash · /run/${String(runId)}`);
+              else setStatus(`+${gained} hash`);
+              await refreshMe();
+              await newChallenge();
+            } catch {
+              setStatus("Submit failed");
+            }
+          },
+        }
+      );
+    } catch (e: any) {
+      // If Phaser import/init fails, surface a readable message.
+      stop();
+      setStatus(`Game failed to start: ${String(e?.message || e)}`);
+    }
   }
 
   function stop() {
