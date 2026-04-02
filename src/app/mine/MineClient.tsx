@@ -68,8 +68,14 @@ export default function MineClient() {
 
   async function refreshMe() {
     const res = await fetch(`/api/paper/me?sessionId=${encodeURIComponent(sessionId)}`);
-    const j = await res.json();
-    if (j?.ok) setPoints(j.me.points || 0);
+    const j = await res.json().catch(() => null);
+    if (!res.ok || !j?.ok) {
+      // Show env/db errors explicitly so it doesn't look like a broken game.
+      const msg = j?.error === "missing_env" ? "Backend not configured (missing env)." : "Backend error.";
+      setStatus(msg);
+      return;
+    }
+    setPoints(j.me.points || 0);
   }
 
   async function newChallenge() {
@@ -78,9 +84,10 @@ export default function MineClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, mode: "runner_v1" }),
     });
-    const j = await res.json();
-    if (!j?.ok) {
-      setStatus("Not ready");
+    const j = await res.json().catch(() => null);
+    if (!res.ok || !j?.ok) {
+      const msg = j?.error === "missing_env" ? "Backend not configured (missing env)." : "Challenge backend error.";
+      setStatus(msg);
       return;
     }
     setChallenge(j.challenge);

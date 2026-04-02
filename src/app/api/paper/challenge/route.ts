@@ -38,7 +38,12 @@ export async function POST(req: Request) {
   const expiresAt = new Date(now + 1000 * 60 * 10).toISOString();
   const seed = crypto.randomUUID();
 
-  const sb = supabaseServerAdmin();
+  let sb;
+  try {
+    sb = supabaseServerAdmin();
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: "missing_env", detail: String(e?.message || e) }, { status: 500 });
+  }
 
   // Best-effort daily cap.
   const today = dayMT();

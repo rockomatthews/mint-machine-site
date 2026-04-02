@@ -15,7 +15,16 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
   }
 
-  const sb = supabaseServerAdmin();
+  let sb;
+  try {
+    sb = supabaseServerAdmin();
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, error: "missing_env", detail: String(e?.message || e) },
+      { status: 500 }
+    );
+  }
+
   const { data, error } = await sb
     .from("paper_balances")
     .select("session_id, points")
@@ -23,7 +32,7 @@ export async function GET(req: Request) {
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ ok: false, error: "db_read_failed" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "db_read_failed", detail: error.message }, { status: 500 });
   }
 
   return NextResponse.json({

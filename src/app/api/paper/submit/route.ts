@@ -37,7 +37,12 @@ export async function POST(req: Request) {
 
   const { sessionId, challengeId, artifact } = body.data;
 
-  const sb = supabaseServerAdmin();
+  let sb;
+  try {
+    sb = supabaseServerAdmin();
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: "missing_env", detail: String(e?.message || e) }, { status: 500 });
+  }
 
   const { data: ch, error: chErr } = await sb
     .from("paper_challenges")
