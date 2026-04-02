@@ -10,8 +10,9 @@ html,
 body {
   padding: 0;
   margin: 0;
-  background: radial-gradient(1200px 700px at 25% 0%, rgba(76, 175, 80, 0.18), transparent 60%),
-    radial-gradient(900px 600px at 90% 10%, rgba(165, 214, 167, 0.12), transparent 60%),
+  background:
+    radial-gradient(1200px 700px at 25% 0%, rgba(253, 209, 4, 0.14), transparent 60%),
+    radial-gradient(900px 600px at 90% 10%, rgba(1, 52, 115, 0.26), transparent 60%),
     var(--bg);
   color: var(--fg);
 }
@@ -21,25 +22,7 @@ a {
   text-decoration: none;
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: rgba(76, 175, 80, 0.16);
-  border: 1px solid rgba(76, 175, 80, 0.38);
-}
-
-.btnSecondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-}
+/* Legacy button styles removed: we use Material UI components. */
 
 .card {
   background: var(--card);
