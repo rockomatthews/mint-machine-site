@@ -35,6 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <nav style={{ display: "flex", gap: 12, opacity: 0.9 }}>
               <Link href="/mine">Mine</Link>
               <Link href="/leaderboard">Leaderboard</Link>
+              <Link href="/profile">Profile</Link>
             </nav>
           </div>
         </div>
