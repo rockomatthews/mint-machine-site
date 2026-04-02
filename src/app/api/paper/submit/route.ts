@@ -56,19 +56,32 @@ export async function POST(req: Request) {
     a = null;
   }
 
-  const mode = a?.mode === "combo_tap" ? "combo_tap" : "unknown";
-  const score = Number.isFinite(Number(a?.score)) ? Math.max(0, Math.min(999, Math.round(Number(a?.score)))) : 0;
-  const hits = Number.isFinite(Number(a?.hits)) ? Math.max(0, Math.min(500, Math.round(Number(a?.hits)))) : 0;
-  const misses = Number.isFinite(Number(a?.misses)) ? Math.max(0, Math.min(500, Math.round(Number(a?.misses)))) : 0;
-  const maxCombo = Number.isFinite(Number(a?.maxCombo)) ? Math.max(0, Math.min(500, Math.round(Number(a?.maxCombo)))) : 0;
-  const elapsedMs = Number.isFinite(Number(a?.elapsedMs)) ? Math.max(0, Math.min(120000, Math.round(Number(a?.elapsedMs)))) : 0;
+  const mode = a?.mode === "runner_v1" ? "runner_v1" : a?.mode === "combo_tap" ? "combo_tap" : "unknown";
 
-  // Award curve (fast feedback, capped)
-  // score 0..999 -> points 1..18-ish
-  let basePoints = 1 + Math.floor(score / 70); // 1..15
-  if (maxCombo >= 25) basePoints += 2;
-  if (maxCombo >= 40) basePoints += 2;
-  basePoints = Math.min(basePoints, 20);
+  const score = Number.isFinite(Number(a?.score)) ? Math.max(0, Math.min(999999, Math.round(Number(a?.score)))) : 0;
+
+  // points curve per mode
+  let basePoints = 1;
+  if (mode === "combo_tap") {
+    const hits = Number.isFinite(Number(a?.hits)) ? Math.max(0, Math.min(500, Math.round(Number(a?.hits)))) : 0;
+    const misses = Number.isFinite(Number(a?.misses)) ? Math.max(0, Math.min(500, Math.round(Number(a?.misses)))) : 0;
+    const maxCombo = Number.isFinite(Number(a?.maxCombo)) ? Math.max(0, Math.min(500, Math.round(Number(a?.maxCombo)))) : 0;
+
+    let p = 1 + Math.floor(Math.min(score, 999) / 70); // 1..15
+    if (maxCombo >= 25) p += 2;
+    if (maxCombo >= 40) p += 2;
+    p = Math.min(p, 20);
+    basePoints = p;
+
+    a = { ...a, hits, misses, maxCombo };
+  } else if (mode === "runner_v1") {
+    // score is time + coins; normalize
+    // typical run scores ~ 300-2000, scale gently
+    basePoints = 2 + Math.min(20, Math.floor(score / 180));
+    basePoints = Math.max(2, Math.min(basePoints, 22));
+  } else {
+    return NextResponse.json({ ok: false, error: "bad_artifact" }, { status: 400 });
+  }
 
   const submissionId = `sub_${crypto.randomUUID().replace(/-/g, "")}`;
 
@@ -78,8 +91,8 @@ export async function POST(req: Request) {
     session_id: sessionId,
     artifact,
     points: basePoints,
-    verdict: mode === "combo_tap" ? "ok" : "rejected",
-    meta: { mode, score, hits, misses, maxCombo, elapsedMs },
+    verdict: "ok",
+    meta: { mode, score },
   });
 
   if (subErr) {
@@ -102,7 +115,7 @@ export async function POST(req: Request) {
     const prevStreak = Number((st as any)?.streak || 0);
     const nextStreak = prevStreak + 1;
 
-    const mult = Math.min(1 + 0.03 * nextStreak, 1.35);
+    const mult = Math.min(1 + 0.02 * nextStreak, 1.25);
     awardedPoints = Math.max(1, Math.round(basePoints * mult));
     streak = nextStreak;
 
@@ -132,10 +145,6 @@ export async function POST(req: Request) {
     submissionId,
     mode,
     score,
-    hits,
-    misses,
-    maxCombo,
-    elapsedMs,
     points: awardedPoints,
     ts: new Date().toISOString(),
   };
@@ -146,8 +155,8 @@ export async function POST(req: Request) {
     submission: {
       id: submissionId,
       points: awardedPoints,
-      verdict: mode === "combo_tap" ? "ok" : "rejected",
-      details: { score, hits, misses, maxCombo, streak },
+      verdict: "ok",
+      details: { score, streak },
       receipt,
     },
   });

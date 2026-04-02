@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 const BodySchema = z
   .object({
     sessionId: z.string().min(8),
-    mode: z.enum(["combo_tap"]).optional(),
+    mode: z.enum(["combo_tap", "runner_v1"]).optional(),
   })
   .strict();
 
@@ -31,17 +31,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
   }
 
+  const mode = body.data.mode || "runner_v1";
+
   const challengeId = newId("ch");
   const now = Date.now();
   const expiresAt = new Date(now + 1000 * 60 * 10).toISOString();
-
   const seed = crypto.randomUUID();
 
   const sb = supabaseServerAdmin();
 
-  // Best-effort daily cap. (Quiet protection; doesn’t bother the user)
+  // Best-effort daily cap.
   const today = dayMT();
-  const maxPerDay = 400;
+  const maxPerDay = 500;
 
   const { data: st, error: stErr } = await sb
     .from("paper_session_state")
@@ -73,12 +74,7 @@ export async function POST(req: Request) {
     // ignore
   }
 
-  // Combo Tap params
-  const durationMs = 35_000;
-  const targetCount = 80; // may extend beyond via client regen
-  const targetSize = 74;
-
-  const instructions = "Tap targets to build combo. Miss breaks combo.";
+  const instructions = mode === "combo_tap" ? "Tap targets to build combo. Miss breaks combo." : "Runner: jump over obstacles.";
 
   const { error } = await sb.from("paper_challenges").insert({
     id: challengeId,
@@ -99,12 +95,10 @@ export async function POST(req: Request) {
       seed,
       instructions,
       expiresAt,
-      meta: {
-        mode: "combo_tap",
-        durationMs,
-        targetCount,
-        targetSize,
-      },
+      meta:
+        mode === "combo_tap"
+          ? ({ mode: "combo_tap", durationMs: 35_000, targetCount: 80, targetSize: 74 } as any)
+          : ({ mode: "runner_v1", durationMs: 45_000 } as any),
     },
   });
 }
