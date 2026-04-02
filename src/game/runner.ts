@@ -79,7 +79,8 @@ export async function createRunnerGame(
       }
 
       // player (mirrored logo)
-      this.player = this.physics.add.sprite(140, groundY - 86, "mm_logo");
+      // Spawn a bit higher so jumps clear early obstacles (logo sprite is visually tall)
+      this.player = this.physics.add.sprite(140, groundY - 120, "mm_logo");
       this.player.setFlipX(true);
       this.player.setScale(0.18);
       this.player.setCollideWorldBounds(true);
@@ -88,7 +89,9 @@ export async function createRunnerGame(
 
       // tighten hitbox to feel fair
       const body = this.player.body as Phaser.Physics.Arcade.Body;
-      body.setSize(this.player.width * 0.62, this.player.height * 0.62, true);
+      body.setSize(this.player.width * 0.58, this.player.height * 0.52, true);
+      // Nudge hitbox up slightly
+      body.setOffset(body.offset.x, body.offset.y - this.player.height * 0.05);
 
       this.physics.add.collider(this.player, this.ground);
 
@@ -149,7 +152,7 @@ export async function createRunnerGame(
       if (this.isGameOver) return;
       const body = this.player.body as Phaser.Physics.Arcade.Body;
       if (body.blocked.down || body.touching.down) {
-        this.player.setVelocityY(-520);
+        this.player.setVelocityY(-620);
       }
     }
 
